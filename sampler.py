@@ -27,8 +27,7 @@ def permutation_table(pool, iterations):
         table[perm] += 1
     return dict(table)
 
-def probability_of_show(horse, iterations):
-    table = permutation_table(pool, iterations)
+def probability_of_show(horse, iterations, table):
     count = 0
     for perm, freq in table.items():
         if horse in perm[:3]:
@@ -36,9 +35,10 @@ def probability_of_show(horse, iterations):
     return count / iterations
 
 def probability_of_show_table(iterations):
+    table = permutation_table(pool, iterations)
     results = {}
     for horse in pool.keys():
-        results[horse] = probability_of_show(horse, iterations)
+        results[horse] = probability_of_show(horse, iterations, table)
     return results
 
 def renormalize_show_table(show_table):
@@ -46,6 +46,8 @@ def renormalize_show_table(show_table):
     # Round all probabilities to 2 decimal points after renormalizing
     return {horse: round(prob * 100 / total, 2) for horse, prob in show_table.items()}
 
-t = probability_of_show_table(100000)
+def final_show_table(iterations):
+    t = probability_of_show_table(iterations)
+    return renormalize_show_table(t)
 
-print(renormalize_show_table(t))
+print(final_show_table(100000))
