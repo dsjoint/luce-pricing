@@ -137,72 +137,59 @@ def get_projected_expectation(pool, method='parimutuel', iterations=100000, show
     
     return dict(expectation)
 
-# Example usage
+def run_analysis(pool, show_pool):
+    print("Relative Show Pool Distribution:")
+    print("-")
+    relative_show_pool = get_relative_pool(show_pool)
+    print_dictionary(relative_show_pool)
+    print("---")
 
-WIN_POOL = {
-    "Diamond's Honor" : 456, 
-    "Queen McKinzie" : 2103, 
-    "Sunna" : 595, 
-    "Sapphire Girl" : 530, 
-    "Tapit's Mischief" : 591
-}
+    print("Projected Show Probabilities:")
+    print("-")
+    show_table = get_show_table(pool, 100000)
+    print_dictionary(show_table)
+    print("---")
 
-SHOW_POOL = {
-    "Diamond's Honor" : 102, 
-    "Queen McKinzie" : 402, 
-    "Sunna" : 86, 
-    "Sapphire Girl" : 90, 
-    "Tapit's Mischief" : 64
-}
+    print("Projected Expected Earnings (Parimutuel):")
+    print("-")
+    projected_exp = get_projected_expectation(pool, method='parimutuel', iterations=100000, show_pool=show_pool)
+    print_dictionary(projected_exp)
 
-print("Relative Show Pool Distribution:")
-print("-")
-relative_show_pool = get_relative_pool(SHOW_POOL)
-print_dictionary(relative_show_pool)
-print("---")
 
-print("Projected Show Probabilities:")
-print("-")
-show_table = get_show_table(WIN_POOL, 100000)
-print_dictionary(show_table)
-print("---")
+###########################################################################
+###################### Code for importing jsonl data ######################
+###########################################################################
 
-print("Projected Expected Earnings (Parimutuel):")
-print("-")
-projected_exp = get_projected_expectation(WIN_POOL, method='parimutuel', iterations=100000, show_pool=SHOW_POOL)
-print_dictionary(projected_exp)
+def jsonl_to_dicts(filename):
+    import json
+    dicts = []
+    with open(filename, "r", encoding="utf-8") as f:
+        for line in f:
+            dicts.append(json.loads(line))
+    return dicts
 
-print("===================================")
+def snapshot_to_pools(snapshot):
+    win_pool = {}
+    show_pool = {}
+    for entry in snapshot['entries']:
+        horse = entry['horse']
+        if entry['win_pool'] is None or entry['show_pool'] is None:
+            continue
+        else:
+            win_pool[horse] = entry['win_pool']
+            show_pool[horse] = entry['show_pool']
+    return win_pool, show_pool
 
-WIN_POOL = {
-    "Diamond's Honor" : 6507, 
-    "Queen McKinzie" : 40841, 
-    "Sunna" : 8891, 
-    "Sapphire Girl" : 20229, 
-    "Tapit's Mischief" : 14385
-}
 
-SHOW_POOL = {
-    "Diamond's Honor" : 783, 
-    "Queen McKinzie" : 11575, 
-    "Sunna" : 1097, 
-    "Sapphire Girl" : 3072, 
-    "Tapit's Mischief" : 1655
-}
 
-print("Relative Show Pool Distribution:")
-print("-")
-relative_show_pool = get_relative_pool(SHOW_POOL)
-print_dictionary(relative_show_pool)
-print("---")
 
-print("Projected Show Probabilities:")
-print("-")
-show_table = get_show_table(WIN_POOL, 100000)
-print_dictionary(show_table)
-print("---")
 
-print("Projected Expected Earnings (Parimutuel):")
-print("-")
-projected_exp = get_projected_expectation(WIN_POOL, method='parimutuel', iterations=100000, show_pool=SHOW_POOL)
-print_dictionary(projected_exp)
+
+if __name__ == "__main__":
+    snapshots = jsonl_to_dicts("live_odds_snapshots.jsonl")
+    latest_snapshot = snapshots[-1]
+
+    win_pool, show_pool = snapshot_to_pools(latest_snapshot)
+    print(f"Track: {latest_snapshot['track']}, Race Number: {latest_snapshot['race_number']}")
+
+    run_analysis(win_pool, show_pool)
