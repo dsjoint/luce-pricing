@@ -4,7 +4,7 @@ import json
 import re
 import logging
 
-URL = "https://www.drf.com/live_odds/winodds/track/MNR/USA/5/D"
+URL = "https://www.drf.com/live_odds/winodds/track/IRE-PUN/IRE/5/D"
 
 # Helper functions
 def to_int_or_none(s):

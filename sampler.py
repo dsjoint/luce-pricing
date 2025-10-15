@@ -1,5 +1,6 @@
 import random
 from collections import defaultdict
+import logging
 
 # Helper functions
 def dict_to_list(pool):
@@ -25,7 +26,14 @@ def weighted_sample_without_replacement(population, weights, k):
 
 def print_dictionary(d):
     for key, value in d.items():
-        print(f"{key}: {value:.4f}")
+        # handle None or non-numeric values safely
+        if value is None:
+            print(f"{key}: None")
+        else:
+            try:
+                print(f"{key}: {value:.4f}")
+            except Exception:
+                print(f"{key}: {value}")
 
 ###############################################################################
 ############### code for sampling permutations based on weights ###############
@@ -77,6 +85,12 @@ def get_probability_table(pool, iterations=100000):
 def get_relative_pool(base_pool):
     relative_pool = {}
     total = sum(base_pool.values())
+    if total == 0:
+        logging.warning("Total weight of base_pool is zero; returning zeros for relative pool.")
+        for element in base_pool:
+            relative_pool[element] = 0.0
+        return relative_pool
+
     for element, weight in base_pool.items():
         relative_pool[element] = weight / total
     return relative_pool
@@ -138,6 +152,13 @@ def get_projected_expectation(pool, method='parimutuel', iterations=100000, show
     return dict(expectation)
 
 def run_analysis(pool, show_pool):
+    # If the show pool sums to zero, cancel analysis and explain to the user.
+    total_show_pool = sum(show_pool.values()) if show_pool else 0
+    if total_show_pool == 0:
+        print("Show pool total is 0. The parimutuel projected earnings cannot be computed because there is no money in the show pool.")
+        print("This usually means the snapshot did not contain valid pool data (e.g., all entries had None), or the bookmaker returned zeros.")
+        return
+
     print("Relative Show Pool Distribution:")
     print("-")
     relative_show_pool = get_relative_pool(show_pool)
