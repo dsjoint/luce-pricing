@@ -33,4 +33,5 @@ def run_once(site: str, base_url: str, out: str, headless: bool):
 if __name__ == "__main__":
     BASE = ""
 
-    run_once("drf", BASE, "live_odds_snapshots.jsonl", headless=True)
+    # Twinspires requires headless=False to work properly
+    run_once("twinspires", BASE, "live_odds_snapshots.jsonl", headless=False)
