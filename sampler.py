@@ -95,14 +95,17 @@ def get_relative_pool(base_pool):
         relative_pool[element] = weight / total
     return relative_pool
 
-# compute expected winnings based on parimutuel payouts for show
+# compute expected winnings and expected winnings given win based on parimutuel payouts for show
 def get_parimutuel_payout(pool, ordering_prob, show_pool):
     population, weights = dict_to_list(pool)
     parimutuel_payout = defaultdict(float)
+    parimutuel_payout_given_win = defaultdict(float)
     total_show_pool = sum(show_pool.values())
 
     for candidate in population:
         payout = 0
+        payout_given_win = 0
+        prob_win = 0
         for ord, prob in ordering_prob.items():
             if candidate not in ord[:3]:
                 continue
@@ -110,10 +113,16 @@ def get_parimutuel_payout(pool, ordering_prob, show_pool):
             top3_total = sum(show_pool[horse] for horse in ord[:3])
             if top3_total <= 0:
                 continue
-
+            
+            prob_win += prob
             payout += (total_show_pool / top3_total) * prob # this computes expected *total return* not just winnings
+            payout_given_win += (total_show_pool / top3_total) * prob # this computes expected *total return* given win
         parimutuel_payout[candidate] = payout - 1 # subtract the 1 you bet to get expected winnings
-    return parimutuel_payout
+        if prob_win > 0:
+            parimutuel_payout_given_win[candidate] = (payout_given_win / prob_win) - 1
+        else:
+            parimutuel_payout_given_win[candidate] = -1 # if horse cannot win, expected winnings given win is -1 (you lose your bet)
+    return parimutuel_payout, parimutuel_payout_given_win
 
 def get_odds_payout(pool, ordering_prob, odds): # odds is a dict of horse -> odds (e.g., 4 means you win 4 for every 1 you bet)
     population, weights = dict_to_list(pool)
@@ -139,7 +148,7 @@ def get_projected_expectation(pool, method='parimutuel', iterations=100000, show
     if method == 'parimutuel':
         if show_pool is None:
             raise ValueError("show_pool must be provided for parimutuel method.")
-        expectation = get_parimutuel_payout(pool, ordering_prob, show_pool)
+        expectation, expectation_given_win = get_parimutuel_payout(pool, ordering_prob, show_pool)
 
     elif method == 'odds':
         if odds is None:
@@ -150,6 +159,28 @@ def get_projected_expectation(pool, method='parimutuel', iterations=100000, show
         raise ValueError("Method must be either 'parimutuel' or 'odds'.")
     
     return dict(expectation)
+
+def get_projected_expectation_on_win(pool, method='parimutuel', iterations=100000, show_pool=None, odds=None):
+    expectation_given_win = defaultdict(float)
+    population, weights = dict_to_list(pool)
+    ordering_prob = get_ordering_distribution(population, weights, iterations)
+
+    if method == 'parimutuel':
+        if show_pool is None:
+            raise ValueError("show_pool must be provided for parimutuel method.")
+        _, expectation_given_win = get_parimutuel_payout(pool, ordering_prob, show_pool)
+
+    elif method == 'odds':
+        if odds is None:
+            raise ValueError("odds must be provided for odds method.")
+        # For odds method, expected winnings given win is simply the odds
+        for horse in population:
+            expectation_given_win[horse] = odds[horse]
+
+    else:
+        raise ValueError("Method must be either 'parimutuel' or 'odds'.")
+    
+    return dict(expectation_given_win)
 
 def run_analysis(pool, show_pool):
     # If the show pool sums to zero, cancel analysis and explain to the user.
@@ -171,10 +202,18 @@ def run_analysis(pool, show_pool):
     print_dictionary(show_table)
     print("---")
 
-    print("Projected Expected Earnings (Parimutuel):")
+    print("Projected Expected Earnings on win (Parimutuel - not accounting for takeout):")
     print("-")
-    projected_exp = get_projected_expectation(pool, method='parimutuel', iterations=100000, show_pool=show_pool)
+    projected_exp = get_projected_expectation_on_win(pool, method='parimutuel', iterations=100000, show_pool=show_pool)
     print_dictionary(projected_exp)
+    print("---")
+
+    print("Good bets (Kelly criterion with 20% takeout):")
+    print("-")
+    for horse, exp in projected_exp.items():
+        kelly_fraction = show_table[horse] - (1 - show_table[horse]) / (exp * 0.8)
+        if kelly_fraction > 0:
+            print(f"{horse}: Kelly fraction = {kelly_fraction:.4f}, Expected Earnings = {(0.8*exp*show_table[horse]):.4f}")
 
 
 ###########################################################################
@@ -211,6 +250,7 @@ if __name__ == "__main__":
     latest_snapshot = snapshots[-1]
 
     win_pool, show_pool = snapshot_to_pools(latest_snapshot)
+
     print(f"Track: {latest_snapshot['track']}, Race Number: {latest_snapshot['race_number']}")
 
     run_analysis(win_pool, show_pool)

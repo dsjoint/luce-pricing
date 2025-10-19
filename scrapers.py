@@ -177,12 +177,13 @@ class TwinSpiresScraper(baseScraper): # twinspires needs headless=False to work 
         
         entries.sort(key=lambda x: x["horse_number"])
         
-        page.goto(url_head + "/advanced", wait_until="domcontentloaded")
+        page.goto(url_head + "/advanced", wait_until="load")
 
         container = page.locator("div.program-container").first
-        container.wait_for(state="attached", timeout=5000)
+        page.wait_for_selector("div.program-container", state="attached", timeout=5000)
 
-        cards = container.locator("cdux-program-entry")
+        cards = container.locator("div.program-container cdux-program-entry")
+        page.wait_for_selector("div.program-container cdux-program-entry", state="attached", timeout=5000)
         total_cards = cards.count()
 
         for i in range(total_cards):
@@ -194,7 +195,7 @@ class TwinSpiresScraper(baseScraper): # twinspires needs headless=False to work 
             scratched = "is-scratched" in classes
             # horse number
             number  = to_int_or_none(card.locator(".program-number").first.text_content())
-            
+
             if number != i+1:
                 logging.warning(f"Mismatch in horse number: expected {i+1}, got {number}")
 
@@ -218,7 +219,7 @@ class TwinSpiresScraper(baseScraper): # twinspires needs headless=False to work 
 
 # For testing
 if __name__ == "__main__":
-    URL = "https://www.twinspires.com/bet/program/classic/keeneland/kee/Thoroughbred/9/pools"
+    URL = "https://www.twinspires.com/bet/program/classic/keeneland/kee/Thoroughbred/5/advanced"
 
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=False)
