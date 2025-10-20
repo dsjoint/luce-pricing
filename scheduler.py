@@ -50,11 +50,55 @@ def scrape_and_analyze(site: str, base_url: str, out: str, headless: bool):
 
     win_pool, show_pool = snapshot_to_pools(snapshot)
     print(f"Track: {snapshot['track']}, Race Number: {snapshot['race_number']}")
-    run_analysis(win_pool, show_pool)
+    return run_analysis(win_pool, show_pool)
+
+def get_results(site: str, base_url: str, headless: bool):
+    with sync_playwright() as p:
+        browser = p.chromium.launch(headless=headless)
+        page = browser.new_page()
+
+        if site == "drf":
+            scraper = DRFScraper()
+        elif site == "twinspires":
+            scraper = TwinSpiresScraper()
+        else:
+            raise ValueError("unknown site")
+        
+        results = scraper.scrape_race_results(page, base_url)
+        browser.close()
+
+        return results
+
+def bet_using_kelly(site: str, base_url: str, out: str, headless: bool): # TODO: edit
+    base_url = "https://www.twinspires.com/bet/program/classic/keeneland/kee/Thoroughbred/"
+    balance = 100
+    
+    for i in range(1,10):
+        url = base_url + str(i) + "/pools"
+        bets = scrape_and_analyze(site, url, out, headless)
+        results = get_results(site, url, headless)
+        show_payouts = results["show_payouts"]
+
+        print(bets)
+        print(show_payouts)
+        print(balance)
+
+        for i in range(len(bets)):
+            if bets[i]["horse"] in show_payouts:
+                balance = balance*(1-bets[i]["bet_size"]) + balance*bets[i]["bet_size"]*(show_payouts[bets[i]["horse"]])/2
+            else:
+                balance *= (1-bets[i]["bet_size"])
+        
+        
+        if balance <= 0:
+            break
+    
+    print(balance)
 
 
 if __name__ == "__main__":
-    BASE = "https://www.twinspires.com/bet/program/classic/santa-anita/sa/Thoroughbred/2/pools"
+    BASE = "https://www.twinspires.com/bet/program/classic/keeneland/kee/Thoroughbred/9/pools"
 
     # Twinspires requires headless=False to work properly
-    scrape_and_analyze("twinspires", BASE, "live_odds_snapshots.jsonl", headless=False)
+    #scrape_and_analyze("twinspires", BASE, "live_odds_snapshots.jsonl", headless=False)
+    bet_using_kelly("twinspires", BASE, "live_odds_snapshots.jsonl", headless=False)

@@ -16,6 +16,15 @@ def money_to_int_or_none(s: str | None):
     s = s.strip().replace("$", "").replace(",", "")
     return int(s) if s.isdigit() else None
 
+def money_to_float_or_none(s: str | None):
+    if not s:
+        return None
+    s = s.strip().replace("$", "").replace(",", "")
+    try:
+        return float(s)
+    except ValueError:
+        return None
+
 def clean(t): 
     return (t or "").strip().replace("\n", " ")
 
@@ -114,6 +123,9 @@ class DRFScraper(baseScraper):
 
         
         return [] # finish implementation
+    
+    def scrape_race_results(self, page: Page, base_url: str | None = None) -> dict:
+        return {}
 
 
 class TwinSpiresScraper(baseScraper): # twinspires needs headless=False to work properly
@@ -159,7 +171,7 @@ class TwinSpiresScraper(baseScraper): # twinspires needs headless=False to work 
 
             horse_number = to_int_or_none(lines[i])
             win_odds = lines[i + 1]
-            win_pool = money_to_int_or_none(lines[i + 2])
+            win_pool = money_to_int_or_none(lines[i + 2])     # TODO: can replace these with money_to_float
             place_pool = money_to_int_or_none(lines[i + 3])
             show_pool = money_to_int_or_none(lines[i + 4])
             i += 5
@@ -177,7 +189,7 @@ class TwinSpiresScraper(baseScraper): # twinspires needs headless=False to work 
         
         entries.sort(key=lambda x: x["horse_number"])
         
-        page.goto(url_head + "/advanced", wait_until="load")
+        page.goto(url_head + "/advanced", wait_until="domcontentloaded")
 
         container = page.locator("div.program-container").first
         page.wait_for_selector("div.program-container", state="attached", timeout=5000)
@@ -210,12 +222,76 @@ class TwinSpiresScraper(baseScraper): # twinspires needs headless=False to work 
         snapshot["entries"] = entries
 
         return snapshot
-
-
+    
 
     def return_race_urls(self, page: Page, base_url: str | None = None) -> list[str]:
         return [] # finish implementation
     
+    def scrape_race_results(self, page: Page, url: str) -> dict:
+        """Scrape race results from the given URL."""
+        url_head = ""
+        if url:
+            last_path = url.split("/")[-1] # get the last path component
+            url_head = url.rsplit("/", 1)[0] # get the base URL without the last path component
+            if last_path != "payouts":
+                url = url_head + "/payouts"
+
+            page.goto(url, wait_until="domcontentloaded")
+        else:
+            logging.error("URL must be provided for TwinSpiresScraper.scrape_race")
+            return {}
+        
+        #group = page.locator("xpath=/html/body/cdux-tux/cdux-header-footer-layout/main/div[1]/div/cdux-view-foundation/div/div[2]/div/cdux-classic-view/div/div[1]/cdux-wagering-section-container/cdux-wagering-section-group/div[2]/cdux-results-section/cdux-result-chart/div").first
+        group = page.locator("cdux-wagering-section-group").first
+        group.wait_for(state="attached", timeout=5000)
+
+        # Now wait for the chart content to actually exist
+        chart = group.locator("cdux-result-chart .entry-container.is-results")
+        chart.wait_for(state="attached", timeout=5000)
+
+        cards = chart.locator("div.entry.is-results:not(.pools)")
+
+        results = {
+            "entries": [],
+            "show_payouts": {}
+        }
+
+        for i in range(cards.count()):
+            card = cards.nth(i)
+
+            entry = {}
+            entry["horse"] = clean(card.locator(".entry_col_runner .main-detail").first.text_content())
+            entry["horse_number"] = to_int_or_none(card.locator(".entry_col_num .saddle-cloth").first.text_content())
+            entry["place"] = i+1
+            entry["win_value"] = money_to_float_or_none(card.locator(".entry_col_win").first.text_content())
+            entry["place_value"] = money_to_float_or_none(card.locator(".entry_col_place").first.text_content())
+            entry["show_value"] = money_to_float_or_none(card.locator(".entry_col_show").first.text_content())
+
+            results["show_payouts"][entry["horse"]] = entry["show_value"]
+
+            results["entries"].append(entry)
+
+        
+        page.goto(url_head + "/finish_order", wait_until="domcontentloaded")
+
+        also_rans_tab = page.locator("cdux-wagering-section-group li#also-rans")
+        if not also_rans_tab.locator(":scope.is-selected").count():
+            also_rans_tab.click()
+
+        page.locator("cdux-wagering-section-group .entry.is-results.finish-order").first.wait_for(state="visible", timeout=10000)
+
+        cards = page.locator("cdux-wagering-section-group .entry.is-results.finish-order")
+        
+        ranking = []
+        for i in range(cards.count()):
+            card = cards.nth(i)
+            horse_num = to_int_or_none(card.locator(".entry_col_num .saddle-cloth").first.text_content())
+            ranking.append(horse_num)
+        
+        results["ranking"] = ranking
+
+        return results
+
 
 # For testing
 if __name__ == "__main__":
@@ -226,8 +302,10 @@ if __name__ == "__main__":
         page = browser.new_page()
 
         scraper = TwinSpiresScraper()
-        snapshot = scraper.scrape_race(page, URL)
+        #snapshot = scraper.scrape_race(page, URL)
 
-        write_jsonl("live_odds_snapshots.jsonl", snapshot)
+        scraper.scrape_race_results(page, URL)
+
+        #write_jsonl("live_odds_snapshots.jsonl", snapshot)
 
         browser.close()

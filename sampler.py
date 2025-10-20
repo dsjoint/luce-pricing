@@ -63,7 +63,7 @@ def probability_of_show(horse, table):
     for perm, prob in table.items():
         if horse in perm[:3]:
             total_prob += prob
-    return total_prob/3
+    return total_prob
 
 def get_show_table(pool, iterations=100000):
     population, weights = dict_to_list(pool)
@@ -182,38 +182,44 @@ def get_projected_expectation_on_win(pool, method='parimutuel', iterations=10000
     
     return dict(expectation_given_win)
 
-def run_analysis(pool, show_pool):
+def run_analysis(pool, show_pool) -> list:
     # If the show pool sums to zero, cancel analysis and explain to the user.
     total_show_pool = sum(show_pool.values()) if show_pool else 0
     if total_show_pool == 0:
         print("Show pool total is 0. The parimutuel projected earnings cannot be computed because there is no money in the show pool.")
         print("This usually means the snapshot did not contain valid pool data (e.g., all entries had None), or the bookmaker returned zeros.")
-        return
+        return []
 
-    print("Relative Show Pool Distribution:")
-    print("-")
-    relative_show_pool = get_relative_pool(show_pool)
-    print_dictionary(relative_show_pool)
-    print("---")
+    # print("Relative Show Pool Distribution:")
+    # print("-")
+    # relative_show_pool = get_relative_pool(show_pool)
+    # print_dictionary(relative_show_pool)
+    # print("---")
 
-    print("Projected Show Probabilities:")
-    print("-")
+    # print("Projected Show Probabilities:")
+    # print("-")
     show_table = get_show_table(pool, 100000)
-    print_dictionary(show_table)
-    print("---")
+    # print_dictionary(show_table)
+    # print("---")
 
-    print("Projected Expected Earnings on win (Parimutuel - not accounting for takeout):")
-    print("-")
+    # print("Projected Expected Earnings (Parimutuel - with 20% takeout):")
+    # print("-")
     projected_exp = get_projected_expectation_on_win(pool, method='parimutuel', iterations=100000, show_pool=show_pool)
-    print_dictionary(projected_exp)
-    print("---")
+    # for horse, exp in projected_exp.items():
+    #     print(f"{horse}: {(0.8*exp*show_table[horse]):.4f}")
+    # print("---")
 
-    print("Good bets (Kelly criterion with 20% takeout):")
-    print("-")
+    bets = []
+
+    # print("Good bets (Kelly criterion with 20% takeout):")
+    # print("-")
     for horse, exp in projected_exp.items():
         kelly_fraction = show_table[horse] - (1 - show_table[horse]) / (exp * 0.8)
         if kelly_fraction > 0:
-            print(f"{horse}: Kelly fraction = {kelly_fraction:.4f}, Expected Earnings = {(0.8*exp*show_table[horse]):.4f}")
+            # print(f"{horse}: Kelly fraction = {kelly_fraction:.4f}, Expected Earnings = {(0.8*exp*show_table[horse]):.4f}")
+            bets.append({"horse": horse, "bet_size": kelly_fraction})
+    
+    return bets
 
 
 ###########################################################################
